@@ -1,12 +1,10 @@
 from PIL import Image
-import numpy as np
 
-from datajoint import blob
+import matplotlib.pyplot as plt
+import nda
 
-import urllib.request
-my_blob = urllib.request.urlopen("https://nda.seunglab.org/stimulus/2").read()
-
-data = blob.unpack(my_blob)
+nda.set_api_key('whatistheconnectome')
+data = nda.request("stimulus/2/")
 
 frame = data[:,:,1000] # frame 1000
 

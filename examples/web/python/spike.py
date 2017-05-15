@@ -1,12 +1,13 @@
 import matplotlib.pyplot as plt
-import numpy as np
+import nda
 
-from datajoint import blob
+nda.set_api_key('whatistheconnectome')
+scans_to_slice = nda.request("slices_for_cell/pinky40/v7/watershed_mst_smc_sem5_remap_2/27328840/")
 
-import urllib.request
-my_blob = urllib.request.urlopen("https://nda.seunglab.org/spike/2/1/11").read()
-
-data = blob.unpack(my_blob)
-
-plt.plot(data.flatten())
-plt.show()
+for scan, slices in scans_to_slice.items():
+    for slice in slices:
+        data = nda.request("spike/pinky40/v7/watershed_mst_smc_sem5_remap_2/" + str(scan) + "/" + str(slice) + "/27328840/")
+        fig = plt.figure() 
+        fig.canvas.set_window_title(str(scan) + '-' + str(slice)) 
+        plt.plot(data.flatten())
+        plt.show()

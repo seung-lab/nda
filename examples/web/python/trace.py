@@ -1,11 +1,8 @@
 import matplotlib.pyplot as plt
-import numpy as np
+import nda
 
-from datajoint import blob
-
-import urllib.request
-my_blob = urllib.request.urlopen("https://nda.seunglab.org/trace/2/1/11").read()
-
+nda.set_api_key('whatistheconnectome')
+data = nda.request("trace/2/1/11/")
 data = blob.unpack(my_blob)
 
 plt.plot(data.flatten())

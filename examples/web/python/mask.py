@@ -1,19 +1,19 @@
 from PIL import Image
-import numpy as np
+import nda
 
-from datajoint import blob
+nda.set_api_key('whatistheconnectome')
+scans_to_slice = nda.request("slices_for_cell/pinky40/v7/watershed_mst_smc_sem5_remap_2/27328840/")
 
-import urllib.request
-my_blob = urllib.request.urlopen("https://nda.seunglab.org/mask/5/1/459/").read()
+for scan, slices in scans_to_slice.items():
+    for slice in slices:
+        print(scan, slice)
+        data = request("mask/pinky40/v7/watershed_mst_smc_sem5_remap_2/" + str(scan) + "/" + str(slice) + "/27328840/")
+        mask = np.zeros(256 * 256, dtype=np.int8)
 
-data = blob.unpack(my_blob)
+        for idx in data.flatten():
+            mask[int(idx)-1] = 255 # 1 indexed
+        
+        mask = mask.reshape((256, 256))
 
-mask = np.zeros(256 * 256, dtype=np.int8)
-
-for idx in data.flatten():
-    mask[int(idx)-1] = 255 # 1 indexed
-
-mask = mask.reshape((256, 256))
-
-img = Image.fromarray(mask, 'L')
-img.show()
+        img = Image.fromarray(mask, 'L')
+        img.show()
