@@ -18,7 +18,6 @@ def request(path):
 
     if (res.info().get_content_type() == 'application/json'):
         res2 = res.read()
-        print(res2)
         return json.loads(res2.decode(res.info().get_param('charset') or 'utf-8'), object_pairs_hook=OrderedDict)
     else:
         return blob.unpack(res.read())
