@@ -16,6 +16,8 @@ import (
 	"github.com/go-redis/redis"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/julienschmidt/httprouter"
+
+	"github.com/rs/cors"
 )
 
 // Min2 ...
@@ -616,9 +618,11 @@ func main() {
 
 	fmt.Printf("started  on port %s\n", os.Getenv("PORT"))
 
-	chainedHandler := &authCheck{handler: router}
+	addAuth := &authCheck{handler: router}
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), chainedHandler))
+	addCors := cors.Default().Handler(addAuth)
+
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), addCors))
 }
 
 func internalError(w http.ResponseWriter, err error) {
