@@ -1,5 +1,6 @@
 from PIL import Image
 import nda
+import numpy as np
 
 nda.set_api_key('whatistheconnectome')
 scans_to_slice = nda.request("slices_for_cell/pinky40/v7/watershed_mst_smc_sem5_remap_2/27328840/")
@@ -7,7 +8,7 @@ scans_to_slice = nda.request("slices_for_cell/pinky40/v7/watershed_mst_smc_sem5_
 for scan, slices in scans_to_slice.items():
     for slice in slices:
         print(scan, slice)
-        data = request("mask/pinky40/v7/watershed_mst_smc_sem5_remap_2/" + str(scan) + "/" + str(slice) + "/27328840/")
+        data = nda.request("mask/pinky40/v7/watershed_mst_smc_sem5_remap_2/" + str(scan) + "/" + str(slice) + "/27328840/")
         mask = np.zeros(256 * 256, dtype=np.int8)
 
         for idx in data.flatten():
