@@ -378,7 +378,10 @@ func main() {
 			return
 		}
 
-		children, err := getNeuronChildren(id, channelString(ps), bbox, resolution)
+		queryValues := r.URL.Query()
+		filterQV := queryValues.Get("filter")
+
+		children, err := getNeuronChildren(id, channelString(ps), bbox, resolution, filterQV == "keypoint")
 
 		if err == sql.ErrNoRows {
 			httpError(w, http.StatusNotFound, err)
@@ -420,7 +423,7 @@ func main() {
 				Y: math.MaxInt64,
 				Z: math.MaxInt64}}
 
-		children, err := getNeuronChildren(id, channelString(ps), maxBBox, 0)
+		children, err := getNeuronChildren(id, channelString(ps), maxBBox, 0, false)
 
 		if err == sql.ErrNoRows {
 			httpError(w, http.StatusNotFound, err)
@@ -686,14 +689,14 @@ type Vector3 struct {
 	Z int `json:"z"`
 }
 
-// Greater is this vector greater in every dimension than that vector?
-func (v Vector3) Greater(v2 Vector3) bool {
-	return v.X > v2.X && v.Y > v2.Y && v.Z > v2.Z
+// GreaterEq is this vector greater or equal in every dimension than that vector?
+func (v Vector3) GreaterEq(v2 Vector3) bool {
+	return v.X >= v2.X && v.Y >= v2.Y && v.Z >= v2.Z
 }
 
-// Lesser is this vector lesser in every dimension than that vector?
-func (v Vector3) Lesser(v2 Vector3) bool {
-	return v.X < v2.X && v.Y < v2.Y && v.Z < v2.Z
+// LesserEq is this vector lesser or equal in every dimension than that vector?
+func (v Vector3) LesserEq(v2 Vector3) bool {
+	return v.X <= v2.X && v.Y <= v2.Y && v.Z <= v2.Z
 }
 
 // Max returns a new vector with the max value for each dimension
@@ -722,6 +725,11 @@ func (v Vector3) DownsampleAniso(resolution uint64) Vector3 {
 		v.Y / (1 << resolution),
 		v.Z,
 	}
+}
+
+// Inside is this vector inside that bbox?
+func (v Vector3) Inside(b BBox) bool {
+	return v.GreaterEq(b.MIN) && v.LesserEq(b.MAX)
 }
 
 func addVectors(a Vector3, b Vector3) Vector3 {
@@ -768,7 +776,7 @@ func (b BBox) Intersection(other BBox) (BBox, error) {
 
 // Inside is this bbox fully inside that bbox?
 func (b BBox) Inside(other BBox) bool {
-	return b.MIN.Greater(other.MIN) && b.MAX.Lesser(other.MAX)
+	return b.MIN.GreaterEq(other.MIN) && b.MAX.LesserEq(other.MAX)
 }
 
 func keypointHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {

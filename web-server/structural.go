@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -88,7 +89,22 @@ func getSynapseParents(synapseID int, channelID int) (int, int, error) {
 	return pre, post, err
 }
 
-func idInRegion(id int, channel string, region BBox, idBbox BBox, resolution uint64) (bool, error) {
+func idInRegion(id int, channel string, region BBox, idBbox BBox, resolution uint64, filterByKeypoint bool) (bool, error) {
+	if filterByKeypoint {
+		channelID, err := getChannelFromString(channel)
+		if err != nil {
+			return false, err
+		}
+
+		keypoint, err := getKeypoint(id, channelID)
+
+		if err != nil {
+			return false, err
+		}
+
+		return keypoint.Inside(region), nil
+	}
+
 	if idBbox.Inside(region) {
 		return true, nil
 	}
@@ -127,7 +143,67 @@ type child struct {
 	Polarity int
 }
 
-func getNeuronChildren(bossID int, channel string, region BBox, resolution uint64) ([]child, error) {
+func getNeuronID(bossID int, channelID int) (int, error) {
+	var neuronID int
+
+	err := structuralDb.QueryRow(`
+		SELECT
+			neuron.id
+		FROM
+			neuron, voxel_set
+		WHERE 
+			neuron.voxel_set = voxel_set.id
+			AND voxel_set.boss_vset_id=? and voxel_set.channel=?`, bossID, channelID).Scan(&neuronID)
+
+	return neuronID, err
+}
+
+func getNeighbors(neuronID int, pre bool, functionalOnly bool) ([]int, error) {
+	from := "synapse.pre"
+	to := "synapse.post"
+
+	if pre {
+		from, to = to, from
+	}
+
+	rows, err2 := structuralDb.Query(`
+	SELECT
+		boss_vset_id
+	FROM
+		synapse,
+		neuron,
+		voxel_set,
+		channel
+	WHERE
+		neuron.voxel_set = voxel_set.id
+		AND `+to+` = neuron.id
+		AND voxel_set.channel = channel.id
+		AND `+from+` = ?
+		AND (? = false OR neuron.em_id is not null)
+	`, neuronID, functionalOnly)
+	defer rows.Close()
+
+	neighbors := make([]int, 0)
+
+	if err2 != nil {
+		return neighbors, err2
+	}
+
+	for rows.Next() {
+		var neighborID int
+		err3 := rows.Scan(&neighborID)
+
+		if err3 != nil {
+			return nil, err3
+		}
+
+		neighbors = append(neighbors, neighborID)
+	}
+
+	return neighbors, nil
+}
+
+func getNeuronChildren(bossID int, channel string, region BBox, resolution uint64, filterByKeypoint bool) ([]child, error) {
 	channelID, err := getChannelFromString(channel)
 
 	if err != nil {
@@ -198,7 +274,7 @@ func getNeuronChildren(bossID int, channel string, region BBox, resolution uint6
 				Y: yMax,
 				Z: zMax}.DownsampleAniso(resolution)}
 
-		inRegion, err := idInRegion(synapseID, synapseChannelString, region, synapseBbox, resolution)
+		inRegion, err := idInRegion(synapseID, synapseChannelString, region, synapseBbox, resolution, filterByKeypoint)
 
 		if err != nil {
 			return res, err // network error, break
@@ -237,13 +313,7 @@ func getUniqueIdsInRegion(channel string, bbox BBox, resolution uint64) (IdsInRe
 		return ids, errArr[0]
 	}
 
-	jsonstart := time.Now()
-
 	err := json.Unmarshal(body, &ids)
-
-	jsonelapsed := time.Since(jsonstart)
-
-	log.Printf("request took %s", jsonelapsed)
 
 	return ids, err
 }
