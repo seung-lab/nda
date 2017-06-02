@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	"math"
-
 	"github.com/go-redis/redis"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/julienschmidt/httprouter"
@@ -140,6 +138,11 @@ type parentRes struct {
 
 type childrenRes struct {
 	ChildrenSynapses map[string]int `json:"child_synapses"`
+}
+
+type neighborsRes struct {
+	Presynaptic  []int `json:"presynaptic"`
+	Postsynaptic []int `json:"postsynaptic"`
 }
 
 type voxelListRes struct {
@@ -403,7 +406,7 @@ func main() {
 		json.NewEncoder(w).Encode(res)
 	})
 
-	router.GET("/neuron_children_simple/:collection/:experiment/:layer/:id/", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	router.GET("/neighbors/:collection/:experiment/:layer/:id/", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		w.Header().Set("Content-Type", "application/json")
 
 		id, parseError := strconv.Atoi(ps.ByName("id"))
@@ -413,34 +416,40 @@ func main() {
 			return
 		}
 
-		maxBBox := BBox{
-			MIN: Vector3{
-				X: math.MinInt64,
-				Y: math.MinInt64,
-				Z: math.MinInt64},
-			MAX: Vector3{
-				X: math.MaxInt64,
-				Y: math.MaxInt64,
-				Z: math.MaxInt64}}
+		queryValues := r.URL.Query()
 
-		children, err := getNeuronChildren(id, channelString(ps), maxBBox, 0, false)
+		functionalQV := queryValues.Get("functional")
+
+		channelID, err := getChannel(ps)
 
 		if err == sql.ErrNoRows {
 			httpError(w, http.StatusNotFound, err)
 			return
 		}
 
-		if err != nil {
-			internalError(w, err)
+		neuronID, neuronErr := getNeuronID(id, channelID)
+
+		if neuronErr != nil {
+			httpError(w, http.StatusNotFound, err)
 			return
 		}
 
-		res := childrenRes{}
-		res.ChildrenSynapses = make(map[string]int)
+		presynaptic, err1 := getNeighbors(neuronID, true, functionalQV == "true")
+		postsynaptic, err2 := getNeighbors(neuronID, false, functionalQV == "true")
 
-		for _, child := range children {
-			res.ChildrenSynapses[strconv.Itoa(child.Synapse)] = child.Polarity
+		if err1 != nil {
+			internalError(w, err1)
+			return
 		}
+
+		if err2 != nil {
+			internalError(w, err2)
+			return
+		}
+
+		res := neighborsRes{}
+		res.Presynaptic = presynaptic
+		res.Postsynaptic = postsynaptic
 
 		json.NewEncoder(w).Encode(res)
 	})
