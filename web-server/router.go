@@ -594,6 +594,9 @@ func main() {
 		if lookupErr == sql.ErrNoRows {
 			httpError(w, http.StatusNotFound, lookupErr)
 			return
+		} else if lookupErr == errNoCellFunctionalId {
+			httpError(w, http.StatusNotFound, lookupErr)
+			return
 		} else if lookupErr != nil {
 			internalError(w, lookupErr)
 			return

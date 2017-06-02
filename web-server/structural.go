@@ -237,14 +237,32 @@ func getUniqueIdsInRegion(channel string, bbox BBox, resolution uint64) (IdsInRe
 		return ids, errArr[0]
 	}
 
+	jsonstart := time.Now()
+
 	err := json.Unmarshal(body, &ids)
+
+	jsonelapsed := time.Since(jsonstart)
+
+	log.Printf("request took %s", jsonelapsed)
 
 	return ids, err
 }
 
-func getFunctionalID(bossID int, channelID int) (int, error) {
-	var functionalID int
-	err := structuralDb.QueryRow(`SELECT neuron.em_id from neuron, voxel_set where neuron.voxel_set = voxel_set.id and boss_vset_id = ? and channel = ?`, bossID, channelID).Scan(&functionalID)
+var errNoCellFunctionalId = errors.New("no functional data for cell")
 
-	return functionalID, err
+func getFunctionalID(bossID int, channelID int) (int, error) {
+	// todo, I can either use null int or I can check for is not null and get back no rows
+	// only issue is I can't separate bad bossID vs no em_id but currently returning 404 for either
+	fmt.Println("got here!")
+	var functionalID sql.NullInt64
+	err := structuralDb.QueryRow(`SELECT neuron.em_id from neuron, voxel_set where neuron.voxel_set = voxel_set.id and neuron.em_id is not null and boss_vset_id = ? and channel = ?`, bossID, channelID).Scan(&functionalID)
+
+	if err != nil {
+		return 0, err
+	}
+
+	if functionalID.Valid {
+		return int(functionalID.Int64), nil
+	}
+	return 0, errNoCellFunctionalId
 }
