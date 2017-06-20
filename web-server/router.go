@@ -172,12 +172,13 @@ func pupilHandler(pg pupilGetter) httprouter.Handle {
 	}
 }
 
+// gets functional cell data given a boss id and channel
 func functionalCellHandler(cdg cellDataGetter) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 
 		scanID, err1 := strconv.Atoi(ps.ByName("scanID"))
-		slice, err2 := strconv.Atoi(ps.ByName("slice"))
+		sliceID, err2 := strconv.Atoi(ps.ByName("sliceID"))
 		cellID, err3 := strconv.Atoi(ps.ByName("cellID"))
 
 		if err1 != nil || err2 != nil || err3 != nil {
@@ -212,7 +213,38 @@ func functionalCellHandler(cdg cellDataGetter) httprouter.Handle {
 			return
 		}
 
-		cellData, err4 := cdg(scanID, slice, funcID)
+		cellData, err4 := cdg(scanID, sliceID, funcID)
+
+		if err4 != nil {
+			internalError(w, err4)
+		} else {
+			w.Write(cellData)
+		}
+	}
+}
+
+// used to get functional data if you already have the "functional id" (no channel or boss id needed)
+func trulyFunctionalCellHandler(cdg cellDataGetter) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+
+		scanID, err1 := strconv.Atoi(ps.ByName("scanID"))
+		sliceID, err2 := strconv.Atoi(ps.ByName("sliceID"))
+		cellID, err3 := strconv.Atoi(ps.ByName("cellID"))
+
+		if err1 != nil || err2 != nil || err3 != nil {
+			firstError := err3
+			if err1 != nil {
+				firstError = err1
+			} else if err2 != nil {
+				firstError = err2
+			}
+
+			httpError(w, http.StatusBadRequest, firstError)
+			return
+		}
+
+		cellData, err4 := cdg(scanID, sliceID, cellID)
 
 		if err4 != nil {
 			internalError(w, err4)
@@ -581,6 +613,27 @@ func main() {
 	router.GET("/pupil_x/:scanID/", pupilHandler(getPupilX))
 	router.GET("/pupil_y/:scanID/", pupilHandler(getPupilY))
 
+	router.GET("/slices_for_cell_functional/:cellID", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		w.Header().Set("Content-Type", "application/json")
+
+		cellID, err1 := strconv.Atoi(ps.ByName("cellID"))
+
+		if err1 != nil {
+			httpError(w, http.StatusBadRequest, err1)
+			return
+		}
+
+		slicesPerScan, err2 := getSlicesForCell(cellID)
+
+		if err2 == sql.ErrNoRows {
+			httpError(w, http.StatusNotFound, err2)
+		} else if err2 != nil {
+			internalError(w, err2)
+		} else {
+			json.NewEncoder(w).Encode(slicesPerScan)
+		}
+	})
+
 	router.GET("/slices_for_cell/:collection/:experiment/:layer/:cellID/", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -616,8 +669,6 @@ func main() {
 
 		slicesPerScan, err2 := getSlicesForCell(funcID)
 
-		fmt.Println(slicesPerScan)
-
 		if err2 == sql.ErrNoRows {
 			httpError(w, http.StatusNotFound, err2)
 		} else if err2 != nil {
@@ -627,9 +678,13 @@ func main() {
 		}
 	})
 
-	router.GET("/mask/:collection/:experiment/:layer/:scanID/:slice/:cellID/", functionalCellHandler(getMask))
-	router.GET("/trace/:collection/:experiment/:layer/:scanID/:slice/:cellID/", functionalCellHandler(getTrace))
-	router.GET("/spike/:collection/:experiment/:layer/:scanID/:slice/:cellID/", functionalCellHandler(getSpike))
+	router.GET("/mask/:collection/:experiment/:layer/:scanID/:sliceID/:cellID/", functionalCellHandler(getMask))
+	router.GET("/trace/:collection/:experiment/:layer/:scanID/:sliceID/:cellID/", functionalCellHandler(getTrace))
+	router.GET("/spike/:collection/:experiment/:layer/:scanID/:sliceID/:cellID/", functionalCellHandler(getSpike))
+
+	router.GET("/mask_functional/:scanID/:sliceID/:cellID/", trulyFunctionalCellHandler(getMask))
+	router.GET("/trace_functional/:scanID/:sliceID/:cellID/", trulyFunctionalCellHandler(getTrace))
+	router.GET("/spike_functional/:scanID/:sliceID/:cellID/", trulyFunctionalCellHandler(getSpike))
 
 	fmt.Printf("started  on port %s\n", os.Getenv("PORT"))
 
