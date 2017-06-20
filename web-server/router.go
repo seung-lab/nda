@@ -690,7 +690,11 @@ func main() {
 
 	addAuth := &authCheck{handler: router}
 
-	addCors := cors.Default().Handler(addAuth)
+	c := cors.New(cors.Options{
+		AllowedHeaders: []string{"Authorization"},
+	})
+
+	addCors := c.Handler(addAuth)
 
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), addCors))
 }
