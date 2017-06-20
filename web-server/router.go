@@ -613,7 +613,7 @@ func main() {
 	router.GET("/pupil_x/:scanID/", pupilHandler(getPupilX))
 	router.GET("/pupil_y/:scanID/", pupilHandler(getPupilY))
 
-	router.GET("/slices_for_cell_functional/:cellID", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	router.GET("/slices_for_cell_functional/:cellID/", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		w.Header().Set("Content-Type", "application/json")
 
 		cellID, err1 := strconv.Atoi(ps.ByName("cellID"))
