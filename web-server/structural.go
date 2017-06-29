@@ -71,6 +71,43 @@ func getKeypoint(bossID int, channelID int) (Vector3, error) {
 	return res, err
 }
 
+func getKeypointsInRegion(channelID int, region BBox) (IdsInRegionRes, error) {
+
+	var res IdsInRegionRes
+
+	rows, err := structuralDb.Query(`
+	SELECT
+		boss_vset_id
+	FROM
+		voxel_set
+	WHERE
+		channel = ?
+		AND key_point_x between ? and ?
+		AND key_point_y between ? and ?
+		AND key_point_z between ? and ?
+	`, channelID,
+		region.MIN.X, region.MAX.X,
+		region.MIN.Y, region.MAX.Y,
+		region.MIN.Z, region.MAX.Z)
+
+	if err != nil {
+		return res, err
+	}
+
+	for rows.Next() {
+		var id int
+		err2 := rows.Scan(&id)
+
+		if err2 != nil {
+			return res, err2
+		}
+
+		res.Ids = append(res.Ids, strconv.Itoa(id))
+	}
+
+	return res, nil
+}
+
 func getSynapseParents(synapseID int, channelID int) (int, int, error) {
 	var pre int
 	var post int

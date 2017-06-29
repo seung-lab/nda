@@ -269,12 +269,32 @@ func idsHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	if parseError != nil {
 		httpError(w, http.StatusBadRequest, parseError)
 	} else {
-		ids, err := getUniqueIdsInRegion(channelString(ps), bbox, resolution)
+		queryValues := r.URL.Query()
+		filterQV := queryValues.Get("filter")
 
-		if err != nil {
-			internalError(w, err)
-		} else {
+		if filterQV == "keypoint" {
+			channelID, err := getChannel(ps)
+			if err == sql.ErrNoRows {
+				httpError(w, http.StatusNotFound, err)
+			} else if err != nil {
+				internalError(w, err)
+			}
+
+			upsampledBbox := BBox{
+				MIN: bbox.MIN.UpsampleAniso(resolution),
+				MAX: bbox.MAX.UpsampleAniso(resolution)}
+
+			ids, err := getKeypointsInRegion(channelID, upsampledBbox)
+
 			json.NewEncoder(w).Encode(ids)
+		} else {
+			// passing channel string for boss query
+			ids, err := getUniqueIdsInRegion(channelString(ps), bbox, resolution)
+			if err != nil {
+				internalError(w, err)
+			} else {
+				json.NewEncoder(w).Encode(ids)
+			}
 		}
 	}
 }
@@ -791,6 +811,15 @@ func (v Vector3) DownsampleAniso(resolution uint64) Vector3 {
 	return Vector3{
 		v.X / (1 << resolution),
 		v.Y / (1 << resolution),
+		v.Z,
+	}
+}
+
+// UpsampleAniso ...
+func (v Vector3) UpsampleAniso(resolution uint64) Vector3 {
+	return Vector3{
+		v.X * (1 << resolution),
+		v.Y * (1 << resolution),
 		v.Z,
 	}
 }
